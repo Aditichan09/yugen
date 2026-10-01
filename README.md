@@ -1,17 +1,19 @@
-# Yugen
+Yugen
 
-Yugen is a project exploring better communication across languages and cultures.
+A project exploring better communication across languages and cultures.
 
-## About
+About
 
-Yugen focuses on making communication feel more natural, clear, and context-aware rather than treating translation as a simple word-for-word process.
+Yugen is being built around the idea that good communication is more than translating words — context and nuance matter too.
 
-## Status
+Status
 
 Currently in development.
 
-## Built with
+Built with
 
 - Next.js
 - TypeScript
 - React
+
+"Live Demo" (https://yugen-alpha.vercel.app)
