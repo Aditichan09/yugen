@@ -6,8 +6,8 @@ import { cn } from "@/lib/utils";
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 
 export const metadata: Metadata = {
-  title: "Yugen — Receipt parsing, simplified",
-  description: "Upload a receipt and let Yugen parse items and split the bill instantly with AI.",
+  title: "Yugen — Extract data from any receipt in seconds",
+  description: "Turn messy receipts into structured, export-ready data with Yugen's intelligent receipt parsing.",
 };
 
 export default function RootLayout({
