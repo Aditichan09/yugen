@@ -76,7 +76,8 @@ Business executives are busy. Keep the output EXTREMELY concise and easy to scan
     });
 
     return NextResponse.json({ result: response.text });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Translation failed';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

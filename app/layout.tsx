@@ -8,7 +8,7 @@ const notoSansJP = Noto_Sans_JP({ subsets: ["latin"], variable: "--font-japanese
 
 export const metadata: Metadata = {
   title: "Yugen — Executive English-Japanese Translation",
-  description: "Translate between English and Japanese with the nuance, clarity, and tone your ideas deserve.",
+  description: "Yugen is a verifiable English to Japanese business translator for executive communication, hierarchy, intent, and nuance.",
 };
 
 export default function RootLayout({
