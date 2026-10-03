@@ -1,9 +1,13 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { Inter } from "next/font/google";
+import { cn } from "@/lib/utils";
+
+const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 
 export const metadata: Metadata = {
-  title: "Yugen — Executive Translation Suite",
-  description: "Bi-directional English-Japanese translation and cultural localization suite.",
+  title: "Yugen — Receipt parsing, simplified",
+  description: "Upload a receipt and let Yugen parse items and split the bill instantly with AI.",
 };
 
 export default function RootLayout({
@@ -12,21 +16,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <body className="bg-slate-950 text-slate-100 antialiased">
-        {mainLayoutWrapper(children)}
+    <html lang="en" className={cn("font-sans", inter.variable)}>
+      <body className="antialiased">
+        {children}
       </body>
     </html>
   );
 }
 
-function mainLayoutWrapper(children: React.ReactNode) {
-  return (
-    <div className="min-h-screen flex flex-col">
-      <header className="border-b border-slate-800 p-4 font-bold tracking-wider">
-        YUGEN 創
-      </header>
-      <main className="flex-1">{children}</main>
-    </div>
-  );
-}

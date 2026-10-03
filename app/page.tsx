@@ -1,567 +1,139 @@
-'use client';
+'use client'
 
-import React, { useState, useRef, useEffect } from 'react';
-import Navbar from './components/Navbar';
-
-const colors = {
-  bg: '#050b18',
-  glass: 'rgba(59, 130, 246, 0.06)',
-  glassBorder: 'rgba(96, 165, 250, 0.15)',
-  glassBorderStrong: 'rgba(56, 189, 248, 0.45)',
-  accent: '#38bdf8',
-  accentDim: '#0ea5e9',
-  textMain: '#e6edf7',
-  textMuted: '#93a5c4',
-  textFaint: '#5c7099',
-  white: '#ffffff',
-  riskLow: '#34d399',
-  riskMedium: '#fbbf24',
-  riskHigh: '#f87171',
-};
-
-const fontStack = '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-
-const glassPanel = {
-  background: colors.glass,
-  backdropFilter: 'blur(16px)',
-  WebkitBackdropFilter: 'blur(16px)',
-  border: `1px solid ${colors.glassBorder}`,
-  borderRadius: '16px',
-};
-
-const space = { xs: '8px', sm: '16px', md: '24px', lg: '32px' };
-
-type Direction = 'EN_TO_JA' | 'JA_TO_EN';
-
-interface HistoryEntry {
-  id: number;
-  direction: Direction;
-  inputText: string;
-  output: string;
-  timestamp: string;
-}
-
-const OUTPUT_SCHEMA: Record<Direction, { key: string; label: string; speak?: boolean }[]> = {
-  EN_TO_JA: [
-    { key: 'Translation', label: '🇯🇵 Translation', speak: true },
-    { key: 'Romaji', label: '🗣️ Pronunciation' },
-    { key: 'Literal Meaning Check', label: '🔍 Literal Meaning Check' },
-    { key: 'Confidence', label: '⚠️ Confidence' },
-    { key: 'Quick Context', label: '💡 Nuance & Context' },
-  ],
-  JA_TO_EN: [
-    { key: 'English Translation', label: '🇺🇸 Translation', speak: true },
-    { key: 'Tone Breakdown', label: '🎌 Tone & Politeness' },
-    { key: 'Confidence', label: '⚠️ Confidence' },
-    { key: 'Business Context', label: '💡 Nuance & Context' },
-  ],
-};
-
-function parseOutput(raw: string, direction: Direction) {
-  const schema = OUTPUT_SCHEMA[direction];
-  const found = schema
-    .map((s) => ({ ...s, index: raw.indexOf(s.key) }))
-    .filter((s) => s.index !== -1)
-    .sort((a, b) => a.index - b.index);
-  if (found.length === 0) return [{ label: '📝 Result', content: raw.trim(), speak: true }];
-  return found.map((s, i) => {
-    const end = i + 1 < found.length ? found[i + 1].index : raw.length;
-    let chunk = raw.slice(s.index, end);
-    chunk = chunk.replace(/^[^\n]*\n?/, '').trim();
-    chunk = chunk.replace(/\*\*/g, '').trim();
-    return { label: s.label, content: chunk, speak: s.speak };
-  });
-}
-
-function riskColor(text: string) {
-  const t = text.toLowerCase();
-  if (t.includes('low')) return colors.riskHigh;
-  if (t.includes('high')) return colors.riskLow;
-  return colors.riskMedium;
-}
-
-function AmbientAudioToggle() {
-  const [isPlaying, setIsPlaying] = useState(false);
-  const audioCtxRef = useRef<AudioContext | null>(null);
-  const oscillatorsRef = useRef<OscillatorNode[]>([]);
-  const toggleAmbient = () => {
-    if (isPlaying) {
-      oscillatorsRef.current.forEach((osc) => osc.stop());
-      oscillatorsRef.current = [];
-      if (audioCtxRef.current) {
-        audioCtxRef.current.close();
-        audioCtxRef.current = null;
-      }
-      setIsPlaying(false);
-    } else {
-      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-      const ctx = new AudioContextClass();
-      audioCtxRef.current = ctx;
-      const masterGain = ctx.createGain();
-      masterGain.gain.setValueAtTime(0.02, ctx.currentTime);
-      masterGain.connect(ctx.destination);
-      const frequencies = [110, 164.81, 220, 329.63];
-      const oscs: OscillatorNode[] = [];
-      frequencies.forEach((freq, idx) => {
-        const osc = ctx.createOscillator();
-        osc.type = idx % 2 === 0 ? 'sine' : 'triangle';
-        osc.frequency.setValueAtTime(freq, ctx.currentTime);
-        osc.detune.setValueAtTime((Math.random() - 0.5) * 10, ctx.currentTime);
-        const oscGain = ctx.createGain();
-        oscGain.gain.setValueAtTime(0.05 / frequencies.length, ctx.currentTime);
-        osc.connect(oscGain);
-        oscGain.connect(masterGain);
-        osc.start();
-        oscs.push(osc);
-      });
-      oscillatorsRef.current = oscs;
-      setIsPlaying(true);
-    }
-  };
-  return (
-    <button
-      onClick={toggleAmbient}
-      title={isPlaying ? 'Mute ambient lounge sound' : 'Enable soft ambient lounge sound'}
-      style={{
-        fontSize: '12px',
-        color: isPlaying ? colors.accent : colors.textMuted,
-        padding: '6px 14px',
-        borderRadius: '20px',
-        border: `1px solid ${isPlaying ? colors.glassBorderStrong : colors.glassBorder}`,
-        background: isPlaying ? 'rgba(56, 189, 248, 0.1)' : colors.glass,
-        backdropFilter: 'blur(12px)',
-        cursor: 'pointer',
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: '6px',
-        fontFamily: fontStack,
-        transition: 'all 0.2s ease',
-      }}
-    >
-      {isPlaying ? '🎧 Ambient Lounge: ON' : '🔈 Ambient Lounge: OFF'}
-    </button>
-  );
-}
-
-const QUICK_TEMPLATES: { label: string; intent: string; text: { EN_TO_JA: string; JA_TO_EN: string } }[] = [
-  {
-    label: '📅 Schedule a meeting',
-    intent: 'Scheduling a Meeting',
-    text: {
-      EN_TO_JA: 'Would it be possible to schedule a meeting sometime next week to discuss this further?',
-      JA_TO_EN: '来週、この件についてお打ち合わせのお時間をいただけますでしょうか。',
-    },
-  },
-  {
-    label: '🔄 Follow up',
-    intent: 'Follow-up',
-    text: {
-      EN_TO_JA: 'I wanted to follow up on my previous message regarding the proposal. Please let me know if you have any updates.',
-      JA_TO_EN: '先日ご送付いたしましたご提案について、その後いかがでしょうか。',
-    },
-  },
-  {
-    label: '🙏 Decline politely',
-    intent: 'Declining an Offer',
-    text: {
-      EN_TO_JA: 'Thank you for the offer, but unfortunately we are unable to move forward with this at this time.',
-      JA_TO_EN: 'ご提案いただき誠にありがとうございます。誠に恐縮ではございますが、今回は見送らせていただきたく存じます。',
-    },
-  },
-  {
-    label: '😔 Apologize for a delay',
-    intent: 'Apology',
-    text: {
-      EN_TO_JA: 'I sincerely apologize for the delay in my response. Please allow me to provide an update as soon as possible.',
-      JA_TO_EN: 'ご連絡が遅くなり誠に申し訳ございません。早急にご報告いたします。',
-    },
-  },
-];
+import Link from 'next/link'
+import { useRef, useState } from 'react'
+import { ArrowRight, Check, FileImage, FileUp, LockKeyhole, ReceiptText, ShieldCheck, Sparkles, UploadCloud } from 'lucide-react'
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Separator } from '@/components/ui/separator'
 
 export default function Home() {
-  const [direction, setDirection] = useState<Direction>('EN_TO_JA');
-  const [prompt, setPrompt] = useState('');
-  const [medium, setMedium] = useState('Email');
-  const [yourRole, setYourRole] = useState('Executive');
-  const [recipientRole, setRecipientRole] = useState('Client / Stakeholder');
-  const [keigoType, setKeigoType] = useState('Keigo (Standard Business)');
-  const [intent, setIntent] = useState('General Update');
-  const [politenessSofteners, setPolitenessSofteners] = useState(true);
-  const [glossary, setGlossary] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [file, setFile] = useState<File | null>(null)
+  const [utr, setUtr] = useState('')
+  const [isDragging, setIsDragging] = useState(false)
+  const [status, setStatus] = useState('')
 
-  const [loading, setLoading] = useState(false);
-  const [output, setOutput] = useState('');
-  const [error, setError] = useState('');
-  const [copiedSection, setCopiedSection] = useState<string | null>(null);
-  const [history, setHistory] = useState<HistoryEntry[]>([]);
-  const [historyLoaded, setHistoryLoaded] = useState(false);
-  const [showHistory, setShowHistory] = useState(false);
-
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem('yugen-history');
-      if (saved) setHistory(JSON.parse(saved));
-    } catch (e) {
-      // ignore corrupted/unavailable storage
+  const selectFile = (nextFile?: File) => {
+    if (nextFile && nextFile.type.startsWith('image/')) {
+      setFile(nextFile)
+      setStatus('')
     }
-    setHistoryLoaded(true);
-  }, []);
+  }
 
-  useEffect(() => {
-    if (!historyLoaded) return;
-    try {
-      localStorage.setItem('yugen-history', JSON.stringify(history));
-    } catch (e) {
-      // ignore storage errors
+  const handleSubmit = () => {
+    if (!file) {
+      setStatus('Upload a receipt image to continue.')
+      return
     }
-  }, [history, historyLoaded]);
-
-  const isEnToJa = direction === 'EN_TO_JA';
-
-  const handleTTS = (textToSpeak: string, langCode: string) => {
-    if (!('speechSynthesis' in window)) {
-      alert('Text-to-speech is not supported by your browser.');
-      return;
+    if (!/^\d{12}$/.test(utr)) {
+      setStatus('Enter the 12-digit UTR from your UPI transaction.')
+      return
     }
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(textToSpeak);
-    utterance.lang = langCode;
-    window.speechSynthesis.speak(utterance);
-  };
-
-  const handleCopy = (text: string, sectionKey: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedSection(sectionKey);
-    setTimeout(() => setCopiedSection(null), 2000);
-  };
-
-  const handleCopyForEmail = (translationText: string) => {
-    const emailFormatted = isEnToJa
-      ? `${translationText}\n\nどうぞよろしくお願いいたします。`
-      : `Hello,\n\n${translationText}\n\nBest regards,`;
-    navigator.clipboard.writeText(emailFormatted);
-    setCopiedSection('email');
-    setTimeout(() => setCopiedSection(null), 2000);
-  };
-
-  const handleTranslate = async () => {
-    if (!prompt.trim()) return;
-    setLoading(true);
-    setError('');
-    setOutput('');
-    try {
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, direction, medium, yourRole, recipientRole, keigoType, politenessSofteners, glossary, intent }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Translation failed.');
-      setOutput(data.result);
-      setHistory((prev) =>
-        [{ id: Date.now(), direction, inputText: prompt, output: data.result, timestamp: new Date().toLocaleTimeString() }, ...prev].slice(0, 8)
-      );
-    } catch (err: any) {
-      setError(err.message || 'Something went wrong.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadHistoryEntry = (entry: HistoryEntry) => {
-    setDirection(entry.direction);
-    setPrompt(entry.inputText);
-    setOutput(entry.output);
-    setShowHistory(false);
-  };
-
-  const outputBlocks = output ? parseOutput(output, direction) : [];
-  const selectStyle: React.CSSProperties = {
-    width: '100%',
-    background: 'rgba(10, 15, 30, 0.6)',
-    border: `1px solid ${colors.glassBorder}`,
-    borderRadius: '8px',
-    padding: '10px',
-    color: colors.textMain,
-    fontFamily: fontStack,
-    fontSize: '14px',
-  };
+    setStatus('Payment details received. Your receipt is ready to parse.')
+  }
 
   return (
-    <main style={{ minHeight: '100vh', backgroundColor: colors.bg, color: colors.textMain, fontFamily: fontStack, padding: space.md }}>
-      <div style={{ maxWidth: '900px', margin: '0 auto' }}>
-        <Navbar />
-
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: space.lg, flexWrap: 'wrap', gap: space.sm }}>
-          <h1 style={{ fontSize: '24px', fontWeight: 700, letterSpacing: '-0.02em', margin: 0, color: colors.white }}>
-            YUGEN <span style={{ color: colors.accent, fontSize: '14px', fontWeight: 400 }}>// Executive JP-EN Suite</span>
-          </h1>
-          <div style={{ display: 'flex', gap: space.xs, alignItems: 'center', flexWrap: 'wrap' }}>
-            <button
-              onClick={() => setShowHistory(!showHistory)}
-              style={{ fontSize: '12px', color: showHistory ? colors.accent : colors.textMuted, padding: '6px 14px', borderRadius: '20px', border: `1px solid ${showHistory ? colors.glassBorderStrong : colors.glassBorder}`, background: colors.glass, backdropFilter: 'blur(12px)', cursor: 'pointer', fontFamily: fontStack }}
-            >
-              🕐 History ({history.length})
-            </button>
-            <AmbientAudioToggle />
-            <span style={{ fontSize: '12px', color: colors.accent, padding: '6px 14px', borderRadius: '20px', border: `1px solid ${colors.glassBorderStrong}`, background: colors.glass, backdropFilter: 'blur(12px)', whiteSpace: 'nowrap' }}>
-              🔒 Encrypted & enterprise secure
+    <main className="min-h-screen overflow-hidden bg-background text-foreground">
+      <div className="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-5 pb-14 pt-5 sm:px-8 lg:px-12">
+        <header className="flex items-center justify-between py-2">
+          <Link href="/" className="flex items-center gap-2.5" aria-label="Yugen home">
+            <span className="flex size-9 items-center justify-center rounded-xl bg-foreground text-background shadow-sm">
+              <ReceiptText className="size-4" />
             </span>
+            <span className="text-base font-semibold tracking-tight">yugen</span>
+          </Link>
+          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+            <span className="hidden items-center gap-1.5 sm:flex"><ShieldCheck className="size-3.5" /> Private by design</span>
+            <Badge variant="secondary" className="rounded-full px-3 py-1 font-medium">MVP preview</Badge>
           </div>
-        </div>
+        </header>
 
-        <div style={{ ...glassPanel, padding: space.md, marginBottom: space.md, borderLeft: `3px solid ${colors.accent}` }}>
-          <h2 style={{ fontSize: '13px', color: colors.accent, textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: 0, marginBottom: space.sm }}>
-            Why Yugen, not a generic translator
-          </h2>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: space.sm }}>
-            <div>
-              <div style={{ fontSize: '13px', fontWeight: 600, color: colors.textMain, marginBottom: '4px' }}>Hierarchy-aware</div>
-              <div style={{ fontSize: '12px', color: colors.textMuted, lineHeight: 1.5 }}>
-                Knows the difference between writing to a peer versus a C-suite executive — generic translators don't.
-              </div>
+        <section className="grid flex-1 items-center gap-12 py-14 lg:grid-cols-[0.9fr_1.1fr] lg:gap-20 lg:py-20">
+          <div className="max-w-xl">
+            <div className="mb-6 inline-flex items-center gap-2 rounded-full border bg-muted/50 px-3 py-1.5 text-xs font-medium text-muted-foreground">
+              <Sparkles className="size-3.5 text-foreground" /> Receipt intelligence, simplified
             </div>
-            <div>
-              <div style={{ fontSize: '13px', fontWeight: 600, color: colors.textMain, marginBottom: '4px' }}>Verifiable, not a black box</div>
-              <div style={{ fontSize: '12px', color: colors.textMuted, lineHeight: 1.5 }}>
-                Every translation includes a literal meaning check and a confidence rating, so you can verify it yourself before sending.
-              </div>
-            </div>
-            <div>
-              <div style={{ fontSize: '13px', fontWeight: 600, color: colors.textMain, marginBottom: '4px' }}>Intent-shaped</div>
-              <div style={{ fontSize: '12px', color: colors.textMuted, lineHeight: 1.5 }}>
-                Declining an offer and opening a negotiation require different tone entirely — Yugen adjusts for that automatically.
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {showHistory && (
-          <div style={{ ...glassPanel, padding: space.md, marginBottom: space.md }}>
-            <h3 style={{ fontSize: '12px', color: colors.textMuted, textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: 0, marginBottom: space.sm }}>
-              Saved on This Device
-            </h3>
-            {history.length === 0 ? (
-              <p style={{ fontSize: '13px', color: colors.textFaint, margin: 0 }}>
-                Nothing yet — your translations will be saved here on this device, so they're still here even if you close the tab.
-              </p>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {history.map((entry) => (
-                  <button
-                    key={entry.id}
-                    onClick={() => loadHistoryEntry(entry)}
-                    style={{ textAlign: 'left', background: 'rgba(255,255,255,0.03)', border: `1px solid ${colors.glassBorder}`, borderRadius: '8px', padding: '10px 12px', cursor: 'pointer', color: colors.textMain, fontFamily: fontStack }}
-                  >
-                    <div style={{ fontSize: '11px', color: colors.textFaint, marginBottom: '4px' }}>
-                      {entry.timestamp} · {entry.direction === 'EN_TO_JA' ? 'EN → JA' : 'JA → EN'}
-                    </div>
-                    <div style={{ fontSize: '13px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {entry.inputText}
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        <div style={{ display: 'flex', gap: space.xs, marginBottom: space.md }}>
-          <button
-            onClick={() => setDirection('EN_TO_JA')}
-            style={{ flex: 1, padding: '12px', borderRadius: '12px', border: `1px solid ${direction === 'EN_TO_JA' ? colors.accent : colors.glassBorder}`, background: direction === 'EN_TO_JA' ? 'rgba(56, 189, 248, 0.1)' : colors.glass, color: direction === 'EN_TO_JA' ? colors.accent : colors.textMuted, fontWeight: 600, cursor: 'pointer', fontFamily: fontStack }}
-          >
-            English ➔ Japanese Business
-          </button>
-          <button
-            onClick={() => setDirection('JA_TO_EN')}
-            style={{ flex: 1, padding: '12px', borderRadius: '12px', border: `1px solid ${direction === 'JA_TO_EN' ? colors.accent : colors.glassBorder}`, background: direction === 'JA_TO_EN' ? 'rgba(56, 189, 248, 0.1)' : colors.glass, color: direction === 'JA_TO_EN' ? colors.accent : colors.textMuted, fontWeight: 600, cursor: 'pointer', fontFamily: fontStack }}
-          >
-            Japanese ➔ Executive English
-          </button>
-        </div>
-
-        <div style={{ ...glassPanel, padding: space.md }}>
-          <label style={{ display: 'block', fontSize: '11px', color: colors.textFaint, marginBottom: space.sm, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-            Translation Settings
-          </label>
-
-          {(
-            <div style={{ marginBottom: space.md }}>
-              <div style={{ marginBottom: space.sm }}>
-                <label style={{ display: 'block', fontSize: '12px', color: colors.textFaint, marginBottom: '4px' }}>Communication Intent</label>
-                <select value={intent} onChange={(e) => setIntent(e.target.value)} style={selectStyle}>
-                  <option value="General Update">General Update</option>
-                  <option value="Request">Request</option>
-                  <option value="Follow-up">Follow-up</option>
-                  <option value="Apology">Apology</option>
-                  <option value="Declining an Offer">Declining an Offer</option>
-                  <option value="Negotiation Opening">Negotiation Opening</option>
-                  <option value="Scheduling a Meeting">Scheduling a Meeting</option>
-                  <option value="Delivering Bad News">Delivering Bad News</option>
-                </select>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: space.sm, marginBottom: space.sm }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '12px', color: colors.textFaint, marginBottom: '4px' }}>Medium</label>
-                  <select value={medium} onChange={(e) => setMedium(e.target.value)} style={selectStyle}>
-                    <option value="Email">Email</option>
-                    <option value="Slack / Chat">Slack / Chat</option>
-                    <option value="Formal Memo">Formal Memo</option>
-                    <option value="Contract Clause">Contract Clause</option>
-                  </select>
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '12px', color: colors.textFaint, marginBottom: '4px' }}>Keigo Style</label>
-                  <select value={keigoType} onChange={(e) => setKeigoType(e.target.value)} style={selectStyle}>
-                    <option value="Keigo (Standard Business)">Keigo (Standard Business)</option>
-                    <option value="Sonkeigo (Respectful/Upward)">Sonkeigo (Respectful/Upward)</option>
-                    <option value="Kenjougo (Humble/Self-Deprecating)">Kenjougo (Humble)</option>
-                  </select>
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: space.sm, marginBottom: space.sm }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '12px', color: colors.textFaint, marginBottom: '4px' }}>Your Role</label>
-                  <select value={yourRole} onChange={(e) => setYourRole(e.target.value)} style={selectStyle}>
-                    <option value="Executive">Executive</option>
-                    <option value="Mid-Level / Peer">Mid-Level / Peer</option>
-                    <option value="Junior Staff">Junior Staff</option>
-                  </select>
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '12px', color: colors.textFaint, marginBottom: '4px' }}>Recipient Role</label>
-                  <select value={recipientRole} onChange={(e) => setRecipientRole(e.target.value)} style={selectStyle}>
-                    <option value="Client / Stakeholder">Client / Stakeholder</option>
-                    <option value="C-Suite Executive">C-Suite Executive</option>
-                    <option value="Internal Team Member">Internal Team Member</option>
-                    <option value="Government Official">Government Official</option>
-                    <option value="Vendor / Supplier">Vendor / Supplier</option>
-                  </select>
-                </div>
-              </div>
-
-              <label style={{ display: 'flex', alignItems: 'center', gap: space.xs, cursor: 'pointer', fontSize: '13px', color: colors.textMuted, marginBottom: space.sm }}>
-                <input type="checkbox" checked={politenessSofteners} onChange={(e) => setPolitenessSofteners(e.target.checked)} style={{ accentColor: colors.accent, width: '15px', height: '15px' }} />
-                {isEnToJa ? 'Auto-add politeness softeners' : 'Flag politeness softeners in breakdown'}
-              </label>
-
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', color: colors.textFaint, marginBottom: '4px' }}>Brand & Term Glossary (optional)</label>
-                <input
-                  type="text"
-                  value={glossary}
-                  onChange={(e) => setGlossary(e.target.value)}
-                  placeholder="e.g. Project Apex -> プロジェクト・エイペックス"
-                  style={{ width: '100%', background: 'rgba(10, 15, 30, 0.6)', border: `1px solid ${colors.glassBorder}`, borderRadius: '8px', padding: '10px', color: colors.textMain, fontFamily: fontStack, fontSize: '13px', boxSizing: 'border-box' }}
-                />
-              </div>
-            </div>
-          )}
-
-          <div style={{ marginBottom: space.sm }}>
-            <label style={{ display: 'block', fontSize: '11px', color: colors.textFaint, marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              Quick-Start Templates
-            </label>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-              {QUICK_TEMPLATES.map((tpl) => (
-                <button
-                  key={tpl.label}
-                  onClick={() => {
-                    setPrompt(isEnToJa ? tpl.text.EN_TO_JA : tpl.text.JA_TO_EN);
-                    setIntent(tpl.intent);
-                  }}
-                  style={{
-                    fontSize: '12px',
-                    color: colors.textMuted,
-                    background: 'rgba(255,255,255,0.03)',
-                    border: `1px solid ${colors.glassBorder}`,
-                    borderRadius: '20px',
-                    padding: '6px 12px',
-                    cursor: 'pointer',
-                    fontFamily: fontStack,
-                  }}
-                >
-                  {tpl.label}
-                </button>
+            <h1 className="text-balance text-5xl font-semibold tracking-[-0.055em] text-foreground sm:text-6xl lg:text-7xl">
+              Receipts in.<br /><span className="text-muted-foreground">Clarity out.</span>
+            </h1>
+            <p className="mt-6 max-w-lg text-pretty text-lg leading-8 text-muted-foreground">
+              Yugen uses AI to parse receipts, split bills, and surface the details that matter — instantly.
+            </p>
+            <div className="mt-9 flex flex-wrap gap-x-6 gap-y-3 text-sm text-muted-foreground">
+              {['AI-powered parsing', 'Instant bill splits', 'Built for privacy'].map((item) => (
+                <span key={item} className="flex items-center gap-2"><Check className="size-4 text-foreground" />{item}</span>
               ))}
             </div>
-          </div>
-
-          <div style={{ marginBottom: space.md }}>
-            <label style={{ display: 'block', fontSize: '13px', color: colors.textMuted, marginBottom: space.xs }}>
-              {isEnToJa ? 'English Draft Input' : 'Japanese Text Input'}
-            </label>
-            <textarea
-              rows={4}
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              placeholder={isEnToJa ? 'Enter message to convert into formal business Japanese...' : 'Enter Japanese corporate text to decode...'}
-              style={{ width: '100%', background: 'rgba(5, 11, 24, 0.7)', border: `1px solid ${colors.glassBorder}`, borderRadius: '10px', padding: '12px', color: colors.white, fontFamily: fontStack, fontSize: '14px', resize: 'vertical', outline: 'none', boxSizing: 'border-box' }}
-            />
-          </div>
-
-          <button
-            onClick={handleTranslate}
-            disabled={loading}
-            style={{ width: '100%', padding: '14px', borderRadius: '10px', border: 'none', background: loading ? colors.textFaint : colors.accent, color: '#001018', fontWeight: 700, fontSize: '14px', cursor: loading ? 'not-allowed' : 'pointer', fontFamily: fontStack, transition: 'opacity 0.2s' }}
-          >
-            {loading ? 'Processing translation...' : 'Execute Professional Translation'}
-          </button>
-        </div>
-
-        {error && (
-          <div style={{ marginTop: space.sm, padding: space.sm, borderRadius: '10px', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#f87171', fontSize: '13px' }}>
-            {error}
-          </div>
-        )}
-
-        {outputBlocks.length > 0 && (
-          <div style={{ marginTop: space.md, display: 'flex', flexDirection: 'column', gap: space.sm }}>
-            {outputBlocks.map((block, i) => {
-              const isConfidence = block.label.includes('Confidence');
-              return (
-                <div key={i} style={{ ...glassPanel, padding: space.md, ...(isConfidence ? { border: `1px solid ${riskColor(block.content)}` } : {}) }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: space.sm }}>
-                    <h3 style={{ fontSize: '13px', color: isConfidence ? riskColor(block.content) : colors.accent, textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>
-                      {block.label}
-                    </h3>
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      {block.speak && (
-                        <button onClick={() => handleTTS(block.content, isEnToJa ? 'ja-JP' : 'en-US')} style={{ background: 'rgba(255,255,255,0.05)', border: `1px solid ${colors.glassBorder}`, color: colors.white, padding: '4px 10px', borderRadius: '6px', fontSize: '12px', cursor: 'pointer' }}>
-                          ▶ Listen
-                        </button>
-                      )}
-                      {block.speak && (
-                        <button onClick={() => handleCopyForEmail(block.content)} style={{ background: 'rgba(255,255,255,0.05)', border: `1px solid ${colors.glassBorder}`, color: colors.white, padding: '4px 10px', borderRadius: '6px', fontSize: '12px', cursor: 'pointer' }}>
-                          {copiedSection === 'email' ? '✓ Copied' : '📧 Copy for Email'}
-                        </button>
-                      )}
-                      <button onClick={() => handleCopy(block.content, `block-${i}`)} style={{ background: 'rgba(255,255,255,0.05)', border: `1px solid ${colors.glassBorder}`, color: colors.white, padding: '4px 10px', borderRadius: '6px', fontSize: '12px', cursor: 'pointer' }}>
-                        {copiedSection === `block-${i}` ? 'Copied!' : 'Copy'}
-                      </button>
-                    </div>
-                  </div>
-                  <p style={{ whiteSpace: 'pre-wrap', fontFamily: fontStack, fontSize: isConfidence ? '16px' : '14px', fontWeight: isConfidence ? 700 : 400, color: isConfidence ? riskColor(block.content) : colors.textMain, margin: 0, lineHeight: 1.6 }}>
-                    {block.content}
-                  </p>
-                </div>
-              );
-            })}
-
-            <div style={{ textAlign: 'center', marginTop: space.xs }}>
-              <p style={{ fontSize: '11px', color: colors.textFaint, marginBottom: '6px' }}>
-                ⚠️ AI-generated translation. Not a certified legal translation. Review before use in contracts.
-              </p>
-              <a href={`mailto:aditimandiya11@gmail.com?subject=Translation Review Request&body=${encodeURIComponent(output)}`} style={{ fontSize: '12px', color: colors.accent, textDecoration: 'underline' }}>
-                Email the founder directly for a second look (early-stage — replies aren't instant)
-              </a>
+            <div className="mt-12 flex items-center gap-3 border-t pt-5 text-xs text-muted-foreground">
+              <LockKeyhole className="size-4" /> Your receipt is processed securely and never shared.
             </div>
           </div>
-        )}
+
+          <Card className="mx-auto w-full max-w-xl rounded-2xl border-border/70 bg-card/90 shadow-2xl shadow-foreground/[0.04]">
+            <CardHeader className="gap-3 p-6 pb-5 sm:p-8 sm:pb-6">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <CardTitle className="text-xl tracking-tight">Upload a receipt</CardTitle>
+                  <CardDescription className="mt-1.5">We&apos;ll extract the items and split the bill for you.</CardDescription>
+                </div>
+                <div className="rounded-lg border bg-muted/60 p-2.5"><FileImage className="size-4 text-muted-foreground" /></div>
+              </div>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-6 px-6 sm:px-8">
+              <button
+                type="button"
+                className={`group flex min-h-44 w-full flex-col items-center justify-center rounded-xl border border-dashed px-6 text-center transition-colors ${isDragging ? 'border-foreground bg-muted' : 'border-border bg-muted/30 hover:border-foreground/40 hover:bg-muted/60'}`}
+                onClick={() => inputRef.current?.click()}
+                onDragOver={(event) => { event.preventDefault(); setIsDragging(true) }}
+                onDragLeave={() => setIsDragging(false)}
+                onDrop={(event) => { event.preventDefault(); setIsDragging(false); selectFile(event.dataTransfer.files[0]) }}
+              >
+                <input ref={inputRef} className="sr-only" type="file" accept="image/*" onChange={(event) => selectFile(event.target.files?.[0])} />
+                <span className="mb-3 flex size-11 items-center justify-center rounded-full border bg-background shadow-sm transition-transform group-hover:-translate-y-0.5">
+                  {file ? <FileUp className="size-5" /> : <UploadCloud className="size-5" />}
+                </span>
+                <span className="text-sm font-medium">{file ? file.name : 'Drop your receipt here, or browse'}</span>
+                <span className="mt-1.5 text-xs text-muted-foreground">PNG, JPG or HEIC · Max 10 MB</span>
+              </button>
+
+              <Separator />
+
+              <Accordion defaultValue={["payment"]} className="w-full">
+                <AccordionItem value="payment" className="border-none">
+                  <AccordionTrigger className="py-0 text-sm font-semibold hover:no-underline">Unlock your receipt parse</AccordionTrigger>
+                  <AccordionContent className="pt-5">
+                    <div className="flex flex-col gap-5">
+                      <div className="grid gap-4 sm:grid-cols-[148px_1fr] sm:items-center">
+                        <div className="flex aspect-square w-full max-w-[148px] items-center justify-center rounded-xl border border-dashed bg-muted/30" aria-label="UPI QR code placeholder">
+                          <div className="flex flex-col items-center gap-2 text-center text-muted-foreground"><div className="grid size-12 grid-cols-3 gap-1 opacity-50">{Array.from({ length: 9 }).map((_, index) => <span key={index} className={index % 2 === 0 ? 'rounded-sm bg-foreground' : 'rounded-sm border border-foreground'} />)}</div><span className="text-[10px] font-medium uppercase tracking-wider">UPI QR code</span></div>
+                        </div>
+                        <div className="flex flex-col gap-3">
+                          <div><p className="text-sm font-medium">Pay ₹9 to unlock</p><p className="mt-1 text-xs leading-5 text-muted-foreground">Scan the QR with any UPI app. Then enter your transaction reference below.</p></div>
+                          <div className="flex flex-col gap-2"><Label htmlFor="utr" className="text-xs text-muted-foreground">12-digit UTR number</Label><Input id="utr" inputMode="numeric" maxLength={12} placeholder="e.g. 412345678901" value={utr} onChange={(event) => setUtr(event.target.value.replace(/\D/g, '').slice(0, 12))} /></div>
+                        </div>
+                      </div>
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
+            </CardContent>
+            <CardFooter className="flex flex-col items-stretch gap-3 p-6 pt-2 sm:p-8 sm:pt-2">
+              <Button size="lg" className="h-12 w-full rounded-xl" onClick={handleSubmit}>Verify Payment &amp; Parse Receipt <ArrowRight data-icon="inline-end" /></Button>
+              <p className="text-center text-xs text-muted-foreground">Manual verification usually takes less than a minute.</p>
+              {status && <p role="status" className="text-center text-xs font-medium text-foreground">{status}</p>}
+            </CardFooter>
+          </Card>
+        </section>
+
+        <footer className="flex flex-col gap-2 border-t pt-5 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+          <span>© 2026 Yugen. Thoughtful tools for everyday life.</span><span className="flex items-center gap-1.5"><ShieldCheck className="size-3.5" /> Secure upload · No card required</span>
+        </footer>
       </div>
     </main>
-  );
+  )
 }
