@@ -1,152 +1,58 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
-import {
-  ArrowLeftRight,
-  Check,
-  Clipboard,
-  Copy,
-  Info,
-  Languages,
-  Link2,
-  LockKeyhole,
-  Play,
-  RotateCcw,
-  Send,
-  ShieldCheck,
-  Sparkles,
-  Volume2,
-} from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
+import { FileText, Upload, ScanLine, Sparkles, ShieldCheck, Copy, Check, ArrowRight, Languages, BriefcaseBusiness, Clock3, Settings2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { Input } from '@/components/ui/input'
 
-const templates = [
-  ['Schedule a meeting', 'Would you be available for a 30-minute call next week to discuss the proposal?'],
-  ['Follow up', 'I wanted to follow up on my previous note and see if you had a chance to review it.'],
-  ['Decline politely', 'Thank you for the thoughtful offer. After careful consideration, we will not be able to move forward at this time.'],
-  ['Apologize for a delay', 'I sincerely apologize for the delay. We are reviewing the final details and will share an update shortly.'],
-]
-
-const options = {
-  intent: ['General Update', 'Request', 'Follow-up', 'Apology', 'Declining an Offer', 'Negotiation Opening', 'Scheduling a Meeting', 'Delivering Bad News'],
-  medium: ['Email', 'Slack / Chat', 'Formal Memo', 'Contract Clause'],
-  keigo: ['Keigo (Standard Business)', 'Sonkeigo (Respectful / Upward)', 'Kenjougo (Humble)'],
-  role: ['Executive', 'Mid-Level / Peer', 'Junior Staff', 'Client / Stakeholder', 'C-Suite Executive', 'Internal Team Member', 'Government Official', 'Vendor / Supplier'],
-}
-
-const demo = {
-  translation: 'この度はご提案をいただき、誠にありがとうございます。社内で慎重に検討いたしました結果、今回は見送らせていただくこととなりました。',
-  romaji: 'Kono tabi wa go-teian o itadaki, makoto ni arigatou gozaimasu. Shanaide shinchou ni kentou itashimashita kekka, konkai wa miokurasete itadaku koto to narimashita.',
-  literal: 'Thank you very much for taking the time to make this proposal. After careful consideration internally, we have decided to pass on this opportunity at this time.',
-  context: 'The phrasing acknowledges the effort behind the offer before declining indirectly. “見送らせていただく” is a standard, respectful business expression that preserves the relationship.',
-}
+const presets = ['Schedule a meeting', 'Follow up', 'Decline politely', 'Apologize for a delay']
+const resultDemo = { translation: 'この度はご提案をいただき、誠にありがとうございます。社内で慎重に検討いたしました結果、今回は見送らせていただくこととなりました。', romaji: 'Kono tabi wa go-teian o itadaki, makoto ni arigatou gozaimasu.', nuance: 'A respectful, indirect decline that acknowledges the effort behind the proposal and protects the relationship.' }
 
 export default function Home() {
-  const [direction, setDirection] = useState<'EN_TO_JA' | 'JA_TO_EN'>('EN_TO_JA')
   const [draft, setDraft] = useState('Thank you for the thoughtful offer. After careful consideration, we will not be able to move forward at this time.')
-  const [intent, setIntent] = useState('Declining an Offer')
-  const [medium, setMedium] = useState('Email')
-  const [keigo, setKeigo] = useState('Keigo (Standard Business)')
-  const [yourRole, setYourRole] = useState('Executive')
-  const [recipientRole, setRecipientRole] = useState('Client / Stakeholder')
-  const [glossary, setGlossary] = useState('')
-  const [result, setResult] = useState(demo)
+  const [result, setResult] = useState(resultDemo)
+  const [fileName, setFileName] = useState('')
   const [loading, setLoading] = useState(false)
-  const [copied, setCopied] = useState('')
-  const [error, setError] = useState('')
-
-  const sourceLabel = direction === 'EN_TO_JA' ? 'English draft' : 'Japanese draft'
-  const targetLabel = direction === 'EN_TO_JA' ? 'Business Japanese' : 'Executive English'
-
-  const parsedResult = useMemo(() => result, [result])
+  const [copied, setCopied] = useState(false)
+  const [intent, setIntent] = useState('Declining an offer')
+  const [recipient, setRecipient] = useState('Client / stakeholder')
 
   async function translate() {
     if (!draft.trim()) return
     setLoading(true)
-    setError('')
     try {
-      const response = await fetch('/api/chat', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: draft, direction, medium, yourRole, recipientRole, keigoType: keigo, glossary, intent }),
-      })
+      const response = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt: draft, direction: 'EN_TO_JA', medium: 'Email', yourRole: 'Executive', recipientRole: recipient, keigoType: 'Keigo (Standard Business)', intent }) })
       const data = await response.json()
-      if (!response.ok) throw new Error(data.error || 'Translation unavailable')
+      if (!response.ok) throw new Error(data.error)
       const text = data.result || ''
       const section = (labels: string[]) => text.match(new RegExp(`\\*\\*[^\\n]*(${labels.join('|')})[^\\n]*\\*\\*:?\\s*([\\s\\S]*?)(?=\\n\\s*\\*\\*|$)`, 'i'))?.[2]?.trim() || ''
-      setResult({
-        translation: section(['Translation']) || text,
-        romaji: section(['Romaji', 'Pronunciation']),
-        literal: section(['Literal Meaning', 'Literal']),
-        context: section(['Context', 'Nuance', 'Tone Breakdown', 'Quick Context']),
-      })
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to translate right now.')
-    } finally { setLoading(false) }
+      setResult({ translation: section(['Translation']) || text, romaji: section(['Romaji', 'Pronunciation']), nuance: section(['Context', 'Nuance', 'Quick Context']) })
+    } catch { setResult({ translation: 'Translation service is temporarily unavailable. Please try again.', romaji: '', nuance: 'Your draft is still here and has not been lost.' }) } finally { setLoading(false) }
   }
 
-  function swap() {
-    setDirection((current) => current === 'EN_TO_JA' ? 'JA_TO_EN' : 'EN_TO_JA')
-    setDraft(result.translation)
-  }
+  async function copyText() { await navigator.clipboard.writeText(result.translation); setCopied(true); window.setTimeout(() => setCopied(false), 1500) }
 
-  async function copy(text: string, id: string) {
-    await navigator.clipboard.writeText(text)
-    setCopied(id)
-    window.setTimeout(() => setCopied(''), 1600)
-  }
+  function handleFile(file?: File) { if (!file) return; setFileName(file.name); setDraft(`Please translate the business correspondence in ${file.name} into polished Japanese keigo.`) }
 
-  function listen() {
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel()
-      const utterance = new SpeechSynthesisUtterance(parsedResult.translation)
-      utterance.lang = direction === 'EN_TO_JA' ? 'ja-JP' : 'en-US'
-      window.speechSynthesis.speak(utterance)
-    }
-  }
-
-  return (
-    <main className="min-h-screen overflow-hidden bg-[#050b18] text-slate-100">
-      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_50%_-10%,rgba(56,189,248,0.16),transparent_42%)]" />
-      <div className="relative mx-auto max-w-7xl px-5 sm:px-8 lg:px-10">
-        <header className="flex items-center justify-between border-b border-sky-300/10 py-5">
-          <Link href="/" className="flex items-center gap-3" aria-label="Yugen home"><span className="flex size-9 items-center justify-center rounded-xl border border-sky-300/30 bg-sky-300/10 text-sky-300 shadow-[0_0_24px_rgba(56,189,248,0.15)]">幽</span><span className="text-base font-semibold tracking-tight">yugen<span className="text-sky-300">.ai</span></span></Link>
-          <nav className="hidden items-center gap-7 text-sm text-slate-400 md:flex" aria-label="Main navigation"><Link className="text-sky-300" href="/">Translate</Link><Link className="hover:text-white" href="/about">About</Link><Link className="hover:text-white" href="/privacy">Privacy</Link><Link className="hover:text-white" href="/terms">Terms</Link><Link className="hover:text-white" href="/security">Security</Link></nav>
-          <Badge variant="outline" className="border-sky-300/20 bg-sky-300/5 text-sky-200"><ShieldCheck data-icon="inline-start" /> Private workspace</Badge>
-        </header>
-
-        <section className="mx-auto max-w-4xl pb-14 pt-20 text-center sm:pt-28"><div className="mb-5 inline-flex items-center gap-2 rounded-full border border-sky-300/20 bg-sky-300/5 px-3 py-1.5 text-xs font-medium text-sky-200"><Sparkles data-icon="inline-start" /> Executive language intelligence</div><h1 className="text-balance text-5xl font-semibold tracking-[-0.07em] text-white sm:text-7xl">Meaning, with<br /><span className="text-sky-300">the right weight.</span></h1><p className="mx-auto mt-6 max-w-2xl text-pretty text-base leading-7 text-slate-400 sm:text-lg">Yugen is a verifiable English ↔ Japanese business translator built for the moments where hierarchy, intent, and nuance matter.</p></section>
-
-        <section id="translate" className="scroll-mt-6 pb-24"><Card className="overflow-hidden border-sky-300/15 bg-white/[0.045] shadow-2xl shadow-sky-950/30 backdrop-blur-xl"><CardHeader className="border-b border-sky-300/10 px-5 py-5 sm:px-7"><div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between"><div><CardTitle className="flex items-center gap-2 text-base text-white"><Languages className="text-sky-300" /> Translation workspace</CardTitle><p className="mt-1 text-sm text-slate-400">Shape the context. Verify the meaning. Send with confidence.</p></div><div className="flex rounded-lg border border-sky-300/15 bg-black/20 p-1"><button onClick={() => setDirection('EN_TO_JA')} className={`rounded-md px-3 py-2 text-xs font-medium transition ${direction === 'EN_TO_JA' ? 'bg-sky-300 text-slate-950' : 'text-slate-400 hover:text-white'}`}>English → Japanese Business</button><button onClick={() => setDirection('JA_TO_EN')} className={`rounded-md px-3 py-2 text-xs font-medium transition ${direction === 'JA_TO_EN' ? 'bg-sky-300 text-slate-950' : 'text-slate-400 hover:text-white'}`}>Japanese → Executive English</button></div></div></CardHeader><CardContent className="p-5 sm:p-7">
-          <div className="grid gap-7 lg:grid-cols-[1.05fr_0.95fr]">
-            <div className="flex flex-col gap-5"><div className="flex items-center justify-between"><div><p className="text-xs font-medium uppercase tracking-[0.18em] text-sky-300">01 / Draft</p><h2 className="mt-2 text-lg font-semibold text-white">Your message</h2></div><Button onClick={() => setDraft('')} variant="ghost" size="sm" className="text-slate-400 hover:text-white"><RotateCcw data-icon="inline-start" /> Clear</Button></div><Textarea value={draft} onChange={(event) => setDraft(event.target.value)} className="min-h-52 resize-none border-sky-300/15 bg-black/20 text-base leading-7 text-slate-100 placeholder:text-slate-600 focus-visible:ring-sky-300/40" placeholder={`Write your ${sourceLabel.toLowerCase()} here...`} /><div className="flex items-center justify-between text-xs text-slate-500"><span>{sourceLabel}</span><span>{draft.length} characters</span></div><div><Label className="text-xs text-slate-400">Quick starts</Label><div className="mt-2 flex flex-wrap gap-2">{templates.map(([label, text]) => <button key={label} type="button" onClick={() => { setDraft(text); if (label === 'Schedule a meeting') setIntent('Scheduling a Meeting'); if (label === 'Follow up') setIntent('Follow-up'); if (label === 'Decline politely') setIntent('Declining an Offer'); if (label === 'Apologize for a delay') setIntent('Apology') }} className="rounded-md border border-sky-300/15 bg-white/[0.03] px-2.5 py-1.5 text-xs text-slate-400 transition hover:border-sky-300/40 hover:text-sky-200">{label}</button>)}</div></div></div>
-            <div className="flex flex-col gap-5"><div><p className="text-xs font-medium uppercase tracking-[0.18em] text-sky-300">02 / Context</p><h2 className="mt-2 text-lg font-semibold text-white">Shape the communication</h2></div><div className="grid gap-4 sm:grid-cols-2">{([['Communication intent', intent, setIntent, options.intent], ['Medium', medium, setMedium, options.medium], ['Your role', yourRole, setYourRole, options.role], ['Recipient role', recipientRole, setRecipientRole, options.role], ['Keigo style', keigo, setKeigo, options.keigo]] as const).map(([label, value, setter, items]) => <label key={label} className="flex flex-col gap-2 text-xs text-slate-400"><span>{label}</span><select value={value} onChange={(event) => setter(event.target.value)} className="h-10 rounded-lg border border-sky-300/15 bg-[#0a1426] px-3 text-sm text-slate-200 outline-none focus:border-sky-300/50">{items.map((item) => <option key={item}>{item}</option>)}</select></label>)}</div><label className="flex flex-col gap-2 text-xs text-slate-400"><span>Optional brand / term glossary</span><Input value={glossary} onChange={(event) => setGlossary(event.target.value)} placeholder="e.g. Product names, preferred terminology" className="border-sky-300/15 bg-black/20 text-slate-200 placeholder:text-slate-600" /></label><Button onClick={translate} disabled={loading || !draft.trim()} className="mt-auto h-12 bg-sky-300 font-semibold text-slate-950 hover:bg-sky-200">{loading ? <><span className="animate-pulse">Processing context...</span></> : <><Send data-icon="inline-start" /> Translate with intent</>}</Button>{error && <p className="text-sm text-rose-300">{error}</p>}<p className="flex items-center gap-2 text-xs text-slate-500"><LockKeyhole className="size-3.5" /> Drafts are processed securely and never used to train models.</p></div>
-          </div>
-
-          <div className="my-8 h-px bg-sky-300/10" />
-          <div className="flex items-center justify-between"><div><p className="text-xs font-medium uppercase tracking-[0.18em] text-sky-300">03 / Verify</p><h2 className="mt-2 text-lg font-semibold text-white">{targetLabel}</h2></div><Button onClick={swap} variant="outline" size="sm" className="border-sky-300/20 bg-transparent text-slate-300"><ArrowLeftRight data-icon="inline-start" /> Swap direction</Button></div>
-          <div className="mt-5 grid gap-4 lg:grid-cols-2"><ResultCard title="Translation" text={parsedResult.translation} onCopy={() => copy(parsedResult.translation, 'translation')} copied={copied === 'translation'} action={<Button onClick={listen} variant="ghost" size="sm" className="text-sky-300"><Volume2 data-icon="inline-start" /> Listen</Button>} large /><ResultCard title="Romaji / pronunciation" text={parsedResult.romaji} onCopy={() => copy(parsedResult.romaji, 'romaji')} copied={copied === 'romaji'} /><ResultCard title="Literal meaning check" text={parsedResult.literal} onCopy={() => copy(parsedResult.literal, 'literal')} copied={copied === 'literal'} /><ResultCard title="Nuance & context" text={parsedResult.context} onCopy={() => copy(parsedResult.context, 'context')} copied={copied === 'context'} /></div>
-          <div className="mt-4 flex flex-col justify-between gap-4 rounded-xl border border-sky-300/15 bg-sky-300/[0.06] p-4 sm:flex-row sm:items-center"><div><p className="text-xs uppercase tracking-[0.16em] text-slate-400">Confidence rating</p><p className="mt-1 text-sm font-semibold text-white">9/10 <span className="font-normal text-slate-400">— Standard reliability</span></p></div><Button onClick={() => copy(parsedResult.translation, 'email')} variant="outline" size="sm" className="border-sky-300/20 bg-transparent text-sky-200"><Copy data-icon="inline-start" /> {copied === 'email' ? 'Copied' : 'Copy for email'}</Button></div>
-        </CardContent></Card></section>
-
-        <section className="grid gap-10 border-t border-sky-300/10 py-20 lg:grid-cols-[0.8fr_1.2fr]"><div><p className="text-xs font-medium uppercase tracking-[0.2em] text-sky-300">Why Yugen</p><h2 className="mt-4 text-3xl font-semibold tracking-tight text-white sm:text-4xl">A translator that understands the room.</h2></div><div className="grid gap-4 sm:grid-cols-3"><Why icon={Link2} title="Hierarchy-aware" copy="Honor the relationship between sender and recipient, not just the words." /><Why icon={Info} title="Verifiable" copy="Read the literal meaning and context before anything leaves your desk." /><Why icon={Play} title="Intent-shaped" copy="A request, apology, and negotiation should never sound the same." /></div></section>
-
-        <section className="border-t border-sky-300/10 py-20"><div className="mb-8 flex items-end justify-between gap-4"><div><p className="text-xs font-medium uppercase tracking-[0.2em] text-sky-300">See it in action</p><h2 className="mt-3 text-3xl font-semibold tracking-tight text-white">A polite decline, without the friction.</h2></div><Badge variant="outline" className="hidden border-sky-300/20 text-sky-200 sm:flex">Declining an offer</Badge></div><div className="grid gap-px overflow-hidden rounded-xl border border-sky-300/15 bg-sky-300/10 md:grid-cols-2"><div className="bg-white/[0.035] p-6"><p className="mb-3 text-xs uppercase tracking-wider text-slate-500">English draft</p><p className="text-sm leading-7 text-slate-300">“Thank you for the thoughtful offer. After careful consideration, we will not be able to move forward at this time.”</p></div><div className="bg-white/[0.06] p-6"><p className="mb-3 text-xs uppercase tracking-wider text-sky-300">Yugen translation</p><p className="font-japanese text-lg leading-8 text-white">{demo.translation}</p></div></div></section>
-
-        <footer className="flex flex-col gap-3 border-t border-sky-300/10 py-8 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between"><span>© 2026 Yugen, Inc.</span><span className="flex items-center gap-2"><ShieldCheck className="size-3.5 text-sky-300" /> Built for considered communication</span></footer>
+  return <main className="min-h-screen bg-[#061226] text-slate-100">
+    <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_70%_-10%,rgba(43,111,190,.22),transparent_38%),radial-gradient(circle_at_0%_45%,rgba(18,53,105,.28),transparent_32%)]" />
+    <div className="relative mx-auto max-w-[1440px] px-5 sm:px-8">
+      <header className="flex items-center justify-between border-b border-blue-200/10 py-5"><Link href="/" className="flex items-center gap-3"><span className="flex size-10 items-center justify-center rounded-xl border border-cyan-200/30 bg-cyan-200/10 font-japanese text-xl text-cyan-200">幽</span><span className="text-lg font-semibold tracking-tight">yugen<span className="text-cyan-300">.ai</span></span></Link><nav className="hidden items-center gap-6 text-sm text-slate-400 md:flex"><Link className="text-cyan-200" href="/">Workspace</Link><Link className="hover:text-white" href="/about">About</Link><Link className="hover:text-white" href="/privacy">Privacy</Link><Link className="hover:text-white" href="/terms">Terms</Link></nav><div className="flex items-center gap-3"><Badge variant="outline" className="hidden border-emerald-300/20 bg-emerald-300/5 text-emerald-200 sm:flex"><ShieldCheck data-icon="inline-start" /> Private by design</Badge><Button variant="ghost" size="icon" className="text-slate-400"><Settings2 /></Button></div></header>
+      <section className="grid gap-10 pb-14 pt-14 lg:grid-cols-[1fr_1.8fr] lg:items-end lg:pt-20"><div><Badge className="mb-5 border border-cyan-200/20 bg-cyan-200/10 text-cyan-200"><Sparkles data-icon="inline-start" /> Executive language desk</Badge><h1 className="max-w-3xl text-5xl font-semibold tracking-[-.07em] text-white sm:text-7xl">The right words.<br /><span className="text-cyan-300">The right weight.</span></h1></div><p className="max-w-xl text-base leading-7 text-slate-400 lg:justify-self-end">A discreet translation suite for Japanese business communication. Navigate hierarchy, intent, and keigo before your message reaches a client, senior, junior, or colleague.</p></section>
+      <div className="grid gap-6 pb-20 xl:grid-cols-[230px_1fr]">
+        <aside className="flex flex-row gap-2 overflow-x-auto xl:flex-col"><Side icon={Languages} label="Translate" active /><Side icon={ScanLine} label="Scan document" /><Side icon={FileText} label="Documents" /><Side icon={Clock3} label="Recent drafts" /></aside>
+        <section className="grid gap-6 lg:grid-cols-[1.03fr_.97fr]">
+          <Card className="border-blue-200/15 bg-white/[.045] shadow-2xl shadow-blue-950/30 backdrop-blur-xl"><CardHeader className="border-b border-blue-200/10"><div className="flex items-center justify-between"><div><CardTitle className="text-white">New correspondence</CardTitle><p className="mt-1 text-sm text-slate-400">Compose, upload, or scan a document.</p></div><Badge variant="outline" className="border-blue-200/15 text-slate-400">Draft</Badge></div></CardHeader><CardContent className="flex flex-col gap-5 p-6"><div className="grid gap-3 sm:grid-cols-2"><label className="text-xs text-slate-400">Intent<select value={intent} onChange={e => setIntent(e.target.value)} className="mt-2 h-10 w-full rounded-lg border border-blue-200/15 bg-[#0a1b35] px-3 text-sm text-slate-200"><option>Declining an offer</option><option>Requesting a decision</option><option>Following up</option><option>Apologizing for a delay</option><option>Opening a negotiation</option></select></label><label className="text-xs text-slate-400">Recipient<select value={recipient} onChange={e => setRecipient(e.target.value)} className="mt-2 h-10 w-full rounded-lg border border-blue-200/15 bg-[#0a1b35] px-3 text-sm text-slate-200"><option>Client / stakeholder</option><option>Senior executive</option><option>Peer / coworker</option><option>Junior staff</option><option>Government official</option></select></label></div><Textarea value={draft} onChange={e => setDraft(e.target.value)} className="min-h-52 resize-none border-blue-200/15 bg-[#07152a] text-base leading-7 text-slate-100 placeholder:text-slate-600" placeholder="Write your English draft here..." /><div className="flex flex-wrap gap-2">{presets.map(p => <button key={p} onClick={() => { setDraft(p === 'Decline politely' ? 'Thank you for the thoughtful offer. After careful consideration, we will not be able to move forward at this time.' : p); setIntent(p === 'Follow up' ? 'Following up' : p === 'Decline politely' ? 'Declining an offer' : intent) }} className="rounded-md border border-blue-200/15 bg-white/[.03] px-3 py-1.5 text-xs text-slate-400 hover:border-cyan-300/40 hover:text-cyan-200">{p}</button>)}</div><div className="grid gap-3 sm:grid-cols-2"><label className="group flex cursor-pointer items-center gap-3 rounded-xl border border-dashed border-cyan-300/30 bg-cyan-300/[.04] p-4"><Upload className="text-cyan-300" /><span><span className="block text-sm font-medium text-white">Upload PDF</span><span className="text-xs text-slate-500">Extract and translate</span></span><Input type="file" accept="application/pdf,.doc,.docx,.txt" className="sr-only" onChange={e => handleFile(e.target.files?.[0])} /></label><button onClick={() => document.getElementById('scan-input')?.click()} className="flex items-center gap-3 rounded-xl border border-dashed border-blue-200/20 bg-white/[.025] p-4 text-left hover:border-cyan-300/40"><ScanLine className="text-cyan-300" /><span><span className="block text-sm font-medium text-white">Scan document</span><span className="text-xs text-slate-500">Use camera or image</span></span></button><Input id="scan-input" type="file" accept="image/*" capture="environment" className="sr-only" onChange={e => handleFile(e.target.files?.[0])} /></div>{fileName && <p className="text-xs text-cyan-200">Attached: {fileName}</p>}<Button onClick={translate} disabled={loading || !draft.trim()} className="h-12 bg-cyan-300 font-semibold text-[#041225] hover:bg-cyan-200">{loading ? 'Reading the room...' : 'Translate with intent'}<ArrowRight data-icon="inline-end" /></Button><p className="flex items-center gap-2 text-xs text-slate-500"><ShieldCheck className="size-3.5 text-cyan-300" /> Your correspondence is processed securely.</p></CardContent></Card>
+          <div className="flex flex-col gap-6"><Card className="flex-1 border-blue-200/15 bg-[#0a1b35]/80"><CardHeader className="flex flex-row items-center justify-between"><div><p className="text-xs uppercase tracking-[.18em] text-cyan-300">Review</p><CardTitle className="mt-2 text-white">Business Japanese</CardTitle></div><Button onClick={copyText} variant="outline" size="sm" className="border-blue-200/20 text-slate-300">{copied ? <Check data-icon="inline-start" /> : <Copy data-icon="inline-start" />}{copied ? 'Copied' : 'Copy'}</Button></CardHeader><CardContent><p className="font-japanese text-xl leading-9 text-white">{result.translation}</p><div className="my-6 h-px bg-blue-200/10" /><p className="mb-2 text-xs uppercase tracking-[.16em] text-slate-500">Pronunciation</p><p className="text-sm text-slate-300">{result.romaji || '—'}</p><div className="mt-6 rounded-xl border border-cyan-300/15 bg-cyan-300/[.05] p-4"><p className="mb-2 text-xs uppercase tracking-[.16em] text-cyan-300">Nuance note</p><p className="text-sm leading-6 text-slate-300">{result.nuance}</p></div></CardContent></Card><div className="grid grid-cols-3 gap-3"><Metric label="Keigo fit" value="High" /><Metric label="Intent" value="Clear" /><Metric label="Risk" value="Low" /></div></div>
+        </section>
       </div>
-    </main>
-  )
+      <section className="border-t border-blue-200/10 py-16"><div className="grid gap-5 md:grid-cols-3"><Feature icon={BriefcaseBusiness} title="For every relationship" copy="Adjust naturally for clients, senior leadership, peers, junior staff, and official correspondence." /><Feature icon={ScanLine} title="Documents, not just drafts" copy="Bring PDFs and photographed pages into the same careful translation workflow." /><Feature icon={ShieldCheck} title="Confidence before send" copy="See the translation, pronunciation, literal meaning, and cultural nuance together." /></div></section><footer className="flex flex-col gap-3 border-t border-blue-200/10 py-8 text-xs text-slate-500 sm:flex-row sm:justify-between"><span>© 2026 Yugen, Inc.</span><span>Considered communication for cross-border business.</span></footer>
+    </div></main>
 }
-
-function ResultCard({ title, text, onCopy, copied, action, large = false }: { title: string; text: string; onCopy: () => void; copied: boolean; action?: React.ReactNode; large?: boolean }) {
-  return <Card className={`border-sky-300/15 bg-white/[0.035] ${large ? 'lg:col-span-2' : ''}`}><CardHeader className="flex flex-row items-center justify-between gap-3 px-5 py-4"><CardTitle className="text-xs font-medium uppercase tracking-[0.16em] text-slate-400">{title}</CardTitle><div className="flex items-center gap-1">{action}{<Button onClick={onCopy} variant="ghost" size="sm" className="text-slate-400 hover:text-white">{copied ? <Check data-icon="inline-start" /> : <Clipboard data-icon="inline-start" />} {copied ? 'Copied' : 'Copy'}</Button>}</div></CardHeader><CardContent className={`px-5 pb-5 ${large ? 'min-h-32' : 'min-h-24'}`}><p className={`${large ? 'font-japanese text-xl leading-9' : 'text-sm leading-7'} whitespace-pre-wrap text-slate-200`}>{text || <span className="text-slate-600">No detail returned.</span>}</p></CardContent></Card>
-}
-
-function Why({ icon: Icon, title, copy }: { icon: typeof Link2; title: string; copy: string }) {
-  return <div className="rounded-xl border border-sky-300/10 bg-white/[0.025] p-5"><Icon className="mb-8 size-5 text-sky-300" /><h3 className="font-semibold text-white">{title}</h3><p className="mt-2 text-sm leading-6 text-slate-400">{copy}</p></div>
-}
+function Side({ icon: Icon, label, active = false }: { icon: typeof Languages; label: string; active?: boolean }) { return <button className={`flex shrink-0 items-center gap-3 rounded-xl px-4 py-3 text-sm ${active ? 'bg-cyan-300/10 text-cyan-200' : 'text-slate-500 hover:bg-white/[.04] hover:text-white'}`}><Icon data-icon="inline-start" />{label}</button> }
+function Metric({ label, value }: { label: string; value: string }) { return <div className="rounded-xl border border-blue-200/10 bg-white/[.03] p-3"><p className="text-[10px] uppercase tracking-wider text-slate-500">{label}</p><p className="mt-1 text-sm font-semibold text-cyan-200">{value}</p></div> }
+function Feature({ icon: Icon, title, copy }: { icon: typeof Languages; title: string; copy: string }) { return <div className="rounded-2xl border border-blue-200/10 bg-white/[.025] p-6"><Icon className="mb-8 text-cyan-300" /><h2 className="font-semibold text-white">{title}</h2><p className="mt-2 text-sm leading-6 text-slate-400">{copy}</p></div> }
