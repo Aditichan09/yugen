@@ -18,6 +18,7 @@ export async function POST(req: Request) {
       politenessSofteners,
       glossary,
       intent,
+      attachment,
     } = await req.json();
 
     const contents =
@@ -75,10 +76,14 @@ Business executives are busy. Keep the output EXTREMELY concise and easy to scan
 
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
-      contents,
+      contents: attachment?.data
+        ? [{ role: 'user', parts: [{ text: contents }, { inlineData: { mimeType: attachment.mimeType, data: attachment.data } }] }]
+        : contents,
     });
 
-    return NextResponse.json({ result: response.text || 'The translation provider returned an empty response.' });
+    const result = response.text || 'The translation provider returned an empty response.';
+    const section = (labels: string[]) => result.match(new RegExp(`(?:\\*\\*)?(?:${labels.join('|')})(?:\\*\\*)?:?\\s*([\\s\\S]*?)(?=\\n\\s*(?:\\*\\*)?(?:Translation|English Translation|日本語訳|Romaji|Tone Breakdown|Literal Meaning Check|Confidence|Quick Context|Business Context)(?:\\*\\*)?:?|$)`, 'i'))?.[1]?.trim().replace(/^\\*\\*|\\*\\*$/g, '') || '';
+    return NextResponse.json({ result, translation: section(direction === 'JA_TO_EN' ? ['English Translation'] : ['Translation', '日本語訳']), nuance: section(['Tone Breakdown', 'Quick Context']), alternative: section(['Business Context', 'Literal Meaning Check']) });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Translation failed';
     return NextResponse.json({ error: message }, { status: 500 });
