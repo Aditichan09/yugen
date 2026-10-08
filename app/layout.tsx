@@ -1,27 +1,7 @@
-import type { Metadata } from "next";
-import "./globals.css";
-import { Inter, Noto_Sans_JP } from "next/font/google";
-import { cn } from "@/lib/utils";
-
-const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
-const notoSansJP = Noto_Sans_JP({ subsets: ["latin"], variable: "--font-japanese" });
-
-export const metadata: Metadata = {
-  title: "Yugen — Executive English-Japanese Translation",
-  description: "Yugen is a verifiable English to Japanese business translator for executive communication, hierarchy, intent, and nuance.",
-};
-
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  return (
-    <html lang="en" className={cn("font-sans", inter.variable, notoSansJP.variable)}>
-      <body className="antialiased">
-        {children}
-      </body>
-    </html>
-  );
-}
-
+import type { Metadata } from 'next'
+import './globals.css'
+import { Shippori_Mincho, Zen_Kaku_Gothic_New } from 'next/font/google'
+const heading=Shippori_Mincho({subsets:['latin'],weight:['600','700'],variable:'--font-heading'})
+const body=Zen_Kaku_Gothic_New({subsets:['latin'],weight:['400','500','700'],variable:'--font-sans'})
+export const metadata:Metadata={title:'Yugen — Business Japanese, checked for tone',description:'Yugen adapts English business writing into considered Japanese keigo with a plain-English review copy.'}
+export default function RootLayout({children}:{children:React.ReactNode}){return <html lang="en" className={`${heading.variable} ${body.variable} dark`}><body>{children}</body></html>}
