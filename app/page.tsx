@@ -17,12 +17,6 @@ const templateOptions = [
   ['Make a request', 'Could you please share the updated documents at your convenience?'],
 ]
 
-const demo: Result = {
-  japanese: 'この度はお時間を頂戴し、誠にありがとうございます。今後とも何卒よろしくお願い申し上げます。',
-  backTranslation: 'Thank you very much for taking the time. We sincerely appreciate it and look forward to your continued support.',
-  note: 'Standard business keigo with humble wording that shows respect to the recipient.',
-}
-
 export default function Home() {
   const [dark, setDark] = useState(true)
   const [messageType, setMessageType] = useState('Business email')
@@ -66,7 +60,7 @@ export default function Home() {
   async function readFile(event: ChangeEvent<HTMLInputElement>) { const file = event.target.files?.[0]; if (!file) return; setError(''); if (file.type === 'text/plain' || file.type.startsWith('image/')) { if (file.type === 'text/plain') setMessage(await file.text()); else setError('Image selected. OCR is not configured in this preview; please paste the text for review.') } else if (file.type === 'application/pdf') { setError('PDF selected. Text extraction is not configured in this preview; please paste the text for review.') } else { setError('Please choose an image, PDF, or text document.') } }
 
   return <main className={dark ? 'site dark' : 'site'}>
-    <header className="site-header"><Link href="/" className="brand"><span>幽</span><b>Yugen</b></Link><nav aria-label="Main navigation"><Link className="active" href="/">Workspace</Link><Link href="/history">History</Link><Link href="/features">Features</Link><Link href="/privacy">Privacy</Link><Link href="/terms">Terms</Link><Link href="/security">Security</Link><Link href="/about">About</Link></nav><button className="theme-toggle" onClick={() => setDark(!dark)} aria-label="Toggle dark mode">{dark ? <Sun /> : <Moon />}<span>{dark ? 'Light' : 'Dark'}</span></button></header>
+    <header className="site-header"><Link href="/" className="brand"><span>幽</span><b>Yugen</b></Link><nav aria-label="Main navigation"><Link className="active" href="/">Workspace</Link><Link href="/history">History</Link><Link href="/features">Features</Link><Link href="/privacy">Privacy</Link><Link href="/terms">Terms</Link><Link href="/security">Security</Link><Link href="/about">About</Link></nav><button className="theme-toggle" onClick={() => setDark(!dark)} aria-label="Toggle dark mode">{dark ? <Sun /> : <Moon />}<span>Dark mode</span></button></header>
     <div className="page-wrap"><section className="hero"><p className="eyebrow">Business Japanese, checked for tone</p><h1>Say it with the right weight.</h1><p>Write in English. Yugen adapts the keigo to who you are writing to and shows you what it says, so you can check before you send.</p></section>
       <section className="workspace" aria-label="Translation workspace"><div className="option-grid">
         <Option title="Message type" tint="navy"><select value={messageType} onChange={e => setMessageType(e.target.value)}><option>Business email</option><option>Chat message</option><option>Letter</option></select></Option>
@@ -80,12 +74,10 @@ export default function Home() {
       <p className="privacy-note">Review every message before sending. Read <Link href="/privacy">Privacy</Link> and <Link href="/security">Security</Link> before uploading confidential documents.</p><label className="check-row"><input type="checkbox" checked={saved} onChange={e => setSaved(e.target.checked)} /> Save this translation to my history</label>
       <div className="result-heading"><div><p className="eyebrow">Result</p><h2>Your business Japanese</h2></div><div className="result-actions"><button className="secondary" onClick={copyResult} disabled={!result}>{copied ? <Check /> : <Clipboard />} {copied ? 'Copied' : 'Copy'}</button><button className="secondary" onClick={() => window.print()} disabled={!result}><FileDown /> Export as PDF</button></div></div>
       <div className="result-panel">{result ? <><p className="japanese">{result.japanese}</p><div className="result-detail"><div><b>Back-translation</b><p>{result.backTranslation}</p></div><div><b>Politeness note</b><p>{result.note}</p></div></div></> : <p className="placeholder">Your Japanese draft appears here, with a back-translation and a note on the politeness level used.</p>}</div>{error && <p className="error" role="alert">{error}</p>}
-      <div className="templates"><div><p className="eyebrow">Quick starts</p><h2>Common correspondence</h2></div><div className="template-grid">{templateOptions.map(([label, value]) => <button key={label} onClick={() => chooseTemplate(value, label)}><span>{label}</span><small>{value}</small></button>)}</div></div></section></div>
+      </section></div>
     <footer className="site-footer"><div className="brand"><span>幽</span><b>Yugen</b></div><p>© 2026 Yugen</p><div><Link href="/privacy">Privacy</Link><Link href="/terms">Terms</Link><Link href="/security">Security</Link><a href="mailto:yugenwebbyadi@gmail.com">yugenwebbyadi@gmail.com</a></div></footer>
   </main>
 }
 
 function Option({ title, tint, children }: { title: string; tint: string; children: React.ReactNode }) { return <label className={`option ${tint}`}><span>{title}</span>{children}</label> }
 
-const _unused = demo
-void _unused
